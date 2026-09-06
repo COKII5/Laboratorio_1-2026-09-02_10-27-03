@@ -1,80 +1,72 @@
 using UnityEngine;
 using TMPro;
 
-/// <summary>
-/// Único script que conoce tanto RegistrationForm como SimpleEmailSender.
-/// El formulario nunca llama directamente al envío de correo: este
-/// notificador se suscribe a sus eventos (OnRegistrationSuccess /
-/// OnRegistrationFailed) y decide qué asunto/cuerpo construir y cuándo
-/// enviar. Toda suscripción se hace en OnEnable y se deshace en
-/// OnDisable, para no dejar referencias colgando si este objeto se
-/// desactiva o destruye mientras el formulario sigue vivo.
-/// </summary>
 public class RegistrationEmailNotifier : MonoBehaviour
 {
-    [Header("Referencias")]
+    [Header("References")]
     public RegistrationForm form;
     public SimpleEmailSender emailSender;
 
-    [Header("UI (opcional)")]
-    [Tooltip("TMP_Text donde se muestra el resultado del envío SMTP (éxito o error). Puede quedar vacío.")]
+    [Header("UI (optional)")]
+    [Tooltip("TMP_Text where the SMTP send result is shown (success or error). Can be left empty.")]
     public TMP_Text sendResultText;
 
     private void OnEnable()
     {
         if (form == null) return;
         form.OnRegistrationSuccess += HandleSuccess;
-        form.OnRegistrationFailed += HandleFailed;
+        form.OnRegistrationFailed  += HandleFailed;
     }
 
     private void OnDisable()
     {
         if (form == null) return;
         form.OnRegistrationSuccess -= HandleSuccess;
-        form.OnRegistrationFailed -= HandleFailed;
+        form.OnRegistrationFailed  -= HandleFailed;
     }
 
     private void HandleSuccess(RegistrationData data)
     {
-        string subject = "Registro completado";
+        string subject = $"Registro completado — {data.Name}";
+
         string body =
             $"Registro exitoso.\n\n" +
-            $"Nombre: {data.Nombre}\n" +
-            $"Correo ingresado: {data.Correo}\n";
+            $"Nombre: {data.Name}\n" +
+            $"Correo ingresado: {data.Email}\n" +
+            $"Fecha y hora del registro: {System.DateTime.Now:yyyy-MM-dd HH:mm:ss}\n";
 
-        Send(data.Destino, subject, body);
+        Send(data.Destination, subject, body);
     }
 
     private void HandleFailed(RegistrationData data)
     {
-        string subject = "Registro rechazado: formato inválido";
+        string subject = $"Registro rechazado: {data.Reason}";
+
         string body =
             $"El registro fue rechazado.\n\n" +
-            $"Nombre ingresado: {data.Nombre}\n" +
-            $"Correo ingresado: {data.Correo}\n" +
-            $"Motivo de la validación que falló: {data.Motivo}\n";
+            $"Nombre ingresado: {data.Name}\n" +
+            $"Correo ingresado: {data.Email}\n" +
+            $"Motivo de la validación que falló: {data.Reason}\n" +
+            $"Fecha y hora del intento: {System.DateTime.Now:yyyy-MM-dd HH:mm:ss}\n";
 
-        // Si el propio campo "To" fue el que fallo la validacion (vacio o
-        // con formato invalido), no hay a donde enviar la notificacion:
-        // se deja constancia solo en la UI/consola, sin intentar el envio.
-        if (string.IsNullOrWhiteSpace(data.Destino))
+        if (string.IsNullOrWhiteSpace(data.Destination))
         {
             if (sendResultText != null)
             {
-                sendResultText.text = "No se envio: falta un correo de destino (To) valido.";
+                sendResultText.text = "No se envió: falta un correo de destino (To) válido.";
             }
             Debug.Log("[RegistrationEmailNotifier] Fallo sin destino valido, no se intenta el envio.");
             return;
         }
 
-        Send(data.Destino, subject, body);
+        Send(data.Destination, subject, body);
     }
 
     private void Send(string toEmail, string subject, string body)
     {
         if (emailSender == null)
         {
-            Debug.Log("[RegistrationEmailNotifier] Falta asignar emailSender.");
+            Debug.LogError("[RegistrationEmailNotifier] Falta asignar emailSender en el Inspector.");
             return;
         }
 
